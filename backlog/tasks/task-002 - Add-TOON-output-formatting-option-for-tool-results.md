@@ -18,11 +18,11 @@ ordinal: 14000
 <!-- SECTION:DESCRIPTION:BEGIN -->
 Add an opt-in TOON (Token-Oriented Object Notation) encoding for tool results returned by the MCP server, to reduce token usage for large/tabular outputs (e.g. window lists, tab lists, permission reports) consumed by LLM clients.
 
-TOON is a compact, schema-aware JSON encoding (YAML-like indentation + CSV-like tabular arrays) that claims 30-60% fewer tokens than JSON for uniform array data. Reference implementations:
-- JS/TS (matches this project's runtime): `@toon-format/toon` on npm — https://github.com/toon-format/toon
-- Python reference implementation for spec/behavior comparison: `toon-format/toon-python` — https://github.com/toon-format/toon-python
+TOON is a compact, schema-aware JSON encoding (YAML-like indentation + CSV-like tabular arrays) that claims 30-60% fewer tokens than JSON for uniform array data. Reference implementation and spec:
+- `toon-format/toon` — https://github.com/toon-format/toon — TypeScript SDK, CLI, benchmarks, and `SPEC.md`. This is the canonical implementation to depend on; check its `packages/` directory for the current published npm package name at implementation time, since the previous `@toon-format/toon` package is being retired/renamed and should not be assumed current.
+- Python reference implementation for spec/behavior comparison only (this server is Node/ESM, not Python): `toon-format/toon-python` — https://github.com/toon-format/toon-python
 
-Since this server is Node/ESM with a single runtime dependency (`@modelcontextprotocol/sdk`), prefer `@toon-format/toon` (JS) as the actual implementation dependency; use toon-python only as a cross-reference for spec conformance if behavior is ambiguous.
+Since this server is Node/ESM with a single runtime dependency (`@modelcontextprotocol/sdk`), the implementation dependency should come from `toon-format/toon`'s current TS/JS package; use toon-python only as a cross-reference for spec conformance if behavior is ambiguous.
 
 Scope:
 - Evaluate which existing handlers return array/tabular data that would benefit (e.g. list_windows, list_tabs, list_open_apps, check_permissions).
