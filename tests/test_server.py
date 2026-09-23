@@ -1,4 +1,7 @@
+import json
 import pytest
+import toon_format
+from hypothesis import given, strategies as st
 from osascript_mcp import executor, server
 
 pytestmark = pytest.mark.unit
@@ -84,6 +87,56 @@ class TestUntrustedResult:
         assert '<untrusted-data source="clipboard">' in text
         assert "some data" in text
         assert result.is_error is False
+
+
+class TestEncodePayload:
+    PAYLOAD = {"app": "Finder", "windows": [{"index": 1, "title": "Downloads", "x": 0, "y": 0}]}
+
+    def test_defaults_to_json_min(self):
+        assert server.OUTPUT_FORMAT == "json-min"
+        assert server.encode_payload(self.PAYLOAD) == json.dumps(self.PAYLOAD, separators=(",", ":"))
+
+    def test_json_format(self, monkeypatch):
+        monkeypatch.setattr(server, "OUTPUT_FORMAT", "json")
+        assert server.encode_payload(self.PAYLOAD) == json.dumps(self.PAYLOAD, indent=2)
+
+    def test_json_min_format(self, monkeypatch):
+        monkeypatch.setattr(server, "OUTPUT_FORMAT", "json-min")
+        assert server.encode_payload(self.PAYLOAD) == json.dumps(self.PAYLOAD, separators=(",", ":"))
+
+    def test_toon_format(self, monkeypatch):
+        monkeypatch.setattr(server, "OUTPUT_FORMAT", "toon")
+        assert server.encode_payload(self.PAYLOAD) == toon_format.encode(self.PAYLOAD)
+
+    def test_toon_round_trips(self, monkeypatch):
+        monkeypatch.setattr(server, "OUTPUT_FORMAT", "toon")
+        encoded = server.encode_payload(self.PAYLOAD)
+        assert toon_format.decode(encoded) == self.PAYLOAD
+
+    def test_capture_writes_jsonl(self, monkeypatch, tmp_path):
+        capture_file = tmp_path / "capture.jsonl"
+        monkeypatch.setattr(server, "_CAPTURE_PATH", str(capture_file))
+        server.encode_payload(self.PAYLOAD, tool="manage_windows")
+        line = capture_file.read_text().strip()
+        assert json.loads(line) == {"tool": "manage_windows", "payload": self.PAYLOAD}
+
+    def test_capture_disabled_by_default(self):
+        assert server._CAPTURE_PATH is None
+
+    @given(
+        st.lists(
+            st.fixed_dictionaries(
+                {
+                    "title": st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=50),
+                    "url": st.text(alphabet=st.characters(blacklist_categories=("Cs",)), max_size=50),
+                    "active": st.booleans(),
+                }
+            ),
+            max_size=5,
+        )
+    )
+    def test_toon_round_trips_adversarial_tab_titles(self, tabs):
+        assert toon_format.decode(toon_format.encode(tabs)) == tabs
 
 
 class TestRunAs:

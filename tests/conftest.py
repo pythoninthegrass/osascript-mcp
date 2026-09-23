@@ -32,7 +32,10 @@ async def open_session():
     """One server process per test, to avoid anyio cancel-scope issues from
     sharing a session-scoped stdio_client across tests."""
     command, args = server_command()
-    params = StdioServerParameters(command=command, args=args, env={"LANG": "en_US.UTF-8"}, cwd=str(ROOT))
+    env = {"LANG": "en_US.UTF-8"}
+    if "OSASCRIPT_MCP_FORMAT" in os.environ:
+        env["OSASCRIPT_MCP_FORMAT"] = os.environ["OSASCRIPT_MCP_FORMAT"]
+    params = StdioServerParameters(command=command, args=args, env=env, cwd=str(ROOT))
     errlog = sys.stderr if os.environ.get("DEBUG") else open(os.devnull, "w")
     try:
         async with stdio_client(params, errlog=errlog) as (read, write), ClientSession(read, write) as client:

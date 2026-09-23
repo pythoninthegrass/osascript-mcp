@@ -1,15 +1,26 @@
 import asyncio
 import json
+import os
 import pytest
 import re
 import time
+import toon_format
 from conftest import CALL_TIMEOUT_S
 
 pytestmark = pytest.mark.integration
 
+OUTPUT_FORMAT = os.environ.get("OSASCRIPT_MCP_FORMAT", "json-min").lower()
+
 
 def text(result):
     return result.content[0].text
+
+
+def parse_result(body: str):
+    """Decode a server-encoded payload per OSASCRIPT_MCP_FORMAT, matching server.encode_payload."""
+    if OUTPUT_FORMAT in ("json", "json-min"):
+        return json.loads(body)
+    return toon_format.decode(body)
 
 
 async def call(client, name, arguments=None):
@@ -456,7 +467,7 @@ async def test_cgwindowlist_bridges_to_real_array(session):
 async def test_screenshot_window_mode_resolves_frontmost_app(session):
     async with session() as client:
         front = await call(client, "get_frontmost_app")
-        front_name = json.loads(text(front))["name"]
+        front_name = parse_result(text(front))["name"]
         r = await call(
             client,
             "screenshot",
@@ -529,13 +540,10 @@ async def test_window_list_reports_parseable_geometry(session):
         body = text(r)
         if "Accessibility" in body:
             return
-        parsed = json.loads(strip_untrusted_envelope(body))
+        parsed = parse_result(strip_untrusted_envelope(body))
         windows = parsed["windows"]
         assert windows == [] or all(
-            isinstance(w["size"]["width"], (int, float))
-            and isinstance(w["size"]["height"], (int, float))
-            and w["size"]["width"] > 0
-            for w in windows
+            isinstance(w["width"], (int, float)) and isinstance(w["height"], (int, float)) and w["width"] > 0 for w in windows
         )
 
 
@@ -585,7 +593,7 @@ async def test_check_permissions_reports_all_classes(session):
         r = await call(client, "check_permissions")
         elapsed_ms = (time.monotonic() - start) * 1000
 
-        perms = json.loads(text(r))
+        perms = parse_result(text(r))
         classes = ["accessibility", "automation", "screenRecording"]
 
         assert all(isinstance(perms[k].get("granted"), (bool, type(None))) for k in classes)

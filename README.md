@@ -7,7 +7,7 @@
 [![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](https://support.apple.com/macos)
 [![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-green)](https://www.python.org)
 [![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
-[![Tests: 156 passed](https://img.shields.io/badge/tests-156%20passed-brightgreen)](#testing)
+[![Tests: 176 passed](https://img.shields.io/badge/tests-176%20passed-brightgreen)](#testing)
 [![Tests](https://github.com/pythoninthegrass/osascript-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/pythoninthegrass/osascript-mcp/actions/workflows/test.yml)
 
 </div>
@@ -99,13 +99,39 @@ Once installed, ask Claude:
 | `get_browser_tabs` | List tabs in Safari, Chrome, or Arc | Automation |
 | `type_text` | Type text into active app (max 500 chars) | Accessibility |
 | `press_key` | Press key with modifiers (cmd+c, return, f5) | Accessibility |
-| `manage_windows` | List / move / resize / minimize / fullscreen / close | Accessibility |
+| `manage_windows` | List (flat `x`/`y`/`width`/`height` fields) / move / resize / minimize / fullscreen / close | Accessibility |
 | `get_displays` | List monitors — position, size, which is main | None |
 | `app_menu` | List or click menu items in any app | Accessibility |
 | `screenshot` | Capture full screen, a region, or an app window | Screen Recording |
 | `app_visibility` | Hide, unhide, or quit an application | Accessibility |
 | `file_open` | Open a file or folder, optionally in a given app | None |
 | `run_shortcut` | List or run Apple Shortcuts | None |
+
+## Output Format
+
+Structured results (window lists, browser tabs, menu items, `check_permissions`, ...) are
+minified JSON by default — no dependency risk, no whitespace tax:
+
+```
+{"app":"Finder","windows":[{"index":1,"title":"Downloads","x":0,"y":0,"width":900,"height":600}]}
+```
+
+Set `OSASCRIPT_MCP_FORMAT=toon` to switch to [TOON](https://github.com/toon-format/toon)
+(compact, tabular) encoding instead:
+
+```
+app: Finder
+windows[1]{index,title,x,y,width,height}:
+  1,Downloads,0,0,900,600
+```
+
+TOON was evaluated as the default (TASK-001.13): measured against real captured payloads
+from this server it beat minified JSON by only ~13% overall, and was an outright regression
+on small flat arrays like `app_menu`'s menu-item lists — not enough margin to justify a new
+dependency as the default. It stays available for clients that want it and for payloads that
+are large and uniformly tabular (long window/tab lists). `OSASCRIPT_MCP_FORMAT=json` restores
+pretty-printed JSON for debugging. `bench/replay.py` reproduces the measurement against any
+captured session (see `OSASCRIPT_MCP_CAPTURE` below).
 
 ## Self-Correcting Menus
 
@@ -132,7 +158,7 @@ Server: "Clicked: File > Export as PDF..."
 | Error sanitization (paths, tokens) | **Yes** | No | No |
 | Unknown-tool dispatch guard | **Yes** | No | No |
 | Self-correcting menu click | **Yes** | No | No |
-| Test suite | **156 (unit + integration)** | 0 | 0 |
+| Test suite | **176 (unit + integration)** | 0 | 0 |
 | Runs tests in CI | **Yes** | No | No |
 | Red-team audit passes | **4** | 0 | 0 |
 | Untrusted-output fencing | **Yes** | No | No |
@@ -173,15 +199,22 @@ in System Settings > Privacy & Security > Accessibility."
 ## Testing
 
 ```bash
-uv run pytest -m unit          # 77 unit + hypothesis property tests, no macOS side effects
-uv run pytest -m integration   # 79 integration tests against the real server
+uv run pytest -m unit          # 95 unit + hypothesis property tests, no macOS side effects
+uv run pytest -m integration   # 81 integration tests against the real server
 ```
 
 The integration suite drives real windows, menus, the clipboard and `screencapture`, so it changes
 local machine state (clipboard contents, may press keys, open apps, show notifications) and needs
 Accessibility/Automation/Screen Recording permissions granted to whatever runs it (Terminal,
 Claude Desktop) for full coverage — cases gated on a missing permission tolerate that outcome
-rather than failing.
+rather than failing. `OSASCRIPT_MCP_FORMAT=toon` (or `json`) re-runs the same suite against the
+other output encodings.
+
+Set `OSASCRIPT_MCP_CAPTURE=/path/to/file.jsonl` to have the server append every structured
+result to that file as `{"tool": ..., "payload": ...}` — off unless set, no effect on the
+response sent to the client. `uv run python bench/replay.py /path/to/file.jsonl` replays a
+capture through each encoding and reports token counts per tool, which is how the numbers in
+[Output Format](#output-format) were produced.
 
 <details>
 <summary>Security & Architecture</summary>

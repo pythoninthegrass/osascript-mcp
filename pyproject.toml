@@ -9,12 +9,17 @@ requires-python = ">=3.13,<3.14"
 
 dependencies = [
     "mcp>=1.7.1",
+    "toon-format==0.9.0b1",
 ]
 
 [project.scripts]
 osascript-mcp = "osascript_mcp.server:main"
 
 [dependency-groups]
+bench = [
+    "anthropic>=1.8.0",
+    "tiktoken>=0.14.0",
+]
 dev = [
     "hypothesis>=6.138.3",
     "pytest>=8.4.1",

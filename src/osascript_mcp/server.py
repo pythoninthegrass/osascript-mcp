@@ -8,6 +8,7 @@ import signal
 import sys
 import tempfile
 import time
+import toon_format
 from datetime import UTC, datetime
 from importlib.metadata import version
 from mcp.server.lowlevel import Server
@@ -29,6 +30,35 @@ def text_result(text: str) -> types.CallToolResult:
     if len(out) > 50000:
         out = out[:50000] + f"\n\n… truncated ({len(text)} total chars)"
     return types.CallToolResult(content=[types.TextContent(type="text", text=out)])
+
+
+# TASK-001.13 measured TOON against real captured payloads from this server (not just
+# synthetic ones) and it beat minified JSON by only ~13% overall — under the 15% bar set
+# before looking at the number, and an outright regression on small flat arrays like
+# app_menu's menu-item lists (TOON's "[N]: " header doesn't amortize over short lists).
+# So "json-min" (free, no new failure surface) is the default; "toon" remains available
+# for payloads that are large and uniformly tabular, and "json" for human debugging.
+OUTPUT_FORMAT = os.environ.get("OSASCRIPT_MCP_FORMAT", "json-min").lower()
+_CAPTURE_PATH = os.environ.get("OSASCRIPT_MCP_CAPTURE")
+
+
+def _capture_payload(tool: str, obj) -> None:
+    if not _CAPTURE_PATH:
+        return
+    try:
+        with open(_CAPTURE_PATH, "a") as f:
+            f.write(json.dumps({"tool": tool, "payload": obj}) + "\n")
+    except OSError:
+        pass  # capture is a diagnostic aid, never let it break a real tool call
+
+
+def encode_payload(obj, *, tool: str = "") -> str:
+    _capture_payload(tool, obj)
+    if OUTPUT_FORMAT == "toon":
+        return toon_format.encode(obj)
+    if OUTPUT_FORMAT == "json":
+        return json.dumps(obj, indent=2)
+    return json.dumps(obj, separators=(",", ":"))  # default: "json-min"
 
 
 UNTRUSTED_NOTE = (
@@ -290,7 +320,7 @@ return appName & "|" & appId"""
     sep = stdout.rfind("|")
     app_name = stdout[:sep] if sep > 0 else stdout
     bundle_id = stdout[sep + 1 :] if sep > 0 else ""
-    return text_result(json.dumps({"name": app_name, "bundleId": bundle_id}))
+    return text_result(encode_payload({"name": app_name, "bundleId": bundle_id}, tool="get_frontmost_app"))
 
 
 async def handle_file_open(args: dict) -> types.CallToolResult:
@@ -335,7 +365,7 @@ async def handle_run_shortcut(args: dict) -> types.CallToolResult:
         if not r["ok"]:
             return error_result(f"Failed to list shortcuts: {r['error']}")
         shortcuts = [s for s in r["stdout"].split("\n") if s.strip()]
-        return text_result(json.dumps(shortcuts, indent=2))
+        return text_result(encode_payload(shortcuts, tool="run_shortcut"))
 
     name = args.get("name")
     if not name or not isinstance(name, str) or not name.strip():
@@ -519,7 +549,7 @@ return winList as text
                 return error_result(ACCESSIBILITY_MSG)
             return error_result(r["error"]["friendlyMessage"])
         if not r["stdout"]:
-            return text_result(json.dumps({"app": app_name, "windows": []}, indent=2))
+            return text_result(encode_payload({"app": app_name, "windows": []}, tool="manage_windows"))
 
         def parse_num(v):
             try:
@@ -539,11 +569,13 @@ return winList as text
                 {
                     "index": i + 1,
                     "title": parts[0].strip(),
-                    "position": {"x": parse_num(pos[0]), "y": parse_num(pos[1])},
-                    "size": {"width": parse_num(sz[0]), "height": parse_num(sz[1])},
+                    "x": parse_num(pos[0]),
+                    "y": parse_num(pos[1]),
+                    "width": parse_num(sz[0]),
+                    "height": parse_num(sz[1]),
                 }
             )
-        return untrusted_result("window titles", json.dumps({"app": app_name, "windows": windows}, indent=2))
+        return untrusted_result("window titles", encode_payload({"app": app_name, "windows": windows}, tool="manage_windows"))
 
     if action == "move":
         position = args.get("position")
@@ -717,7 +749,7 @@ end tell
                 return error_result(ACCESSIBILITY_MSG)
             return error_result(r["error"]["friendlyMessage"])
         items = [s for s in r["stdout"].split("\n") if s != ""]
-        return untrusted_result("application menu items", json.dumps(items, indent=2))
+        return untrusted_result("application menu items", encode_payload(items, tool="app_menu"))
 
     if args["action"] == "click":
         if not menu_path or len(menu_path) < 2:
@@ -852,14 +884,14 @@ return tabList as text
             return error_result(f"{browser_app} is not running. Open it first.")
         return error_result(f"Failed to get tabs: {r['error']['friendlyMessage']}")
     if not r["stdout"]:
-        return text_result(json.dumps([]))
+        return text_result(encode_payload([], tool="get_browser_tabs"))
     tabs = []
     for line in r["stdout"].split("\n"):
         parts = line.split("|||")
         if len(parts) != 3:
             continue
         tabs.append({"title": parts[0], "url": parts[1], "active": parts[2].strip().lower() == "true"})
-    return untrusted_result("browser tabs", json.dumps(tabs, indent=2))
+    return untrusted_result("browser tabs", encode_payload(tabs, tool="get_browser_tabs"))
 
 
 async def handle_get_displays(args: dict) -> types.CallToolResult:
@@ -888,7 +920,11 @@ async def handle_get_displays(args: dict) -> types.CallToolResult:
     )
     if r["exit_code"] != 0:
         return error_result("Failed to get display info")
-    return text_result(r["stdout"].strip())
+    try:
+        displays = json.loads(r["stdout"].strip())
+    except json.JSONDecodeError:
+        return error_result("Failed to parse display info.")
+    return text_result(encode_payload(displays, tool="get_displays"))
 
 
 async def _screenshot_error_result(err_text: str) -> types.CallToolResult:
@@ -1064,7 +1100,7 @@ async def handle_check_permissions(args: dict) -> types.CallToolResult:
     screen_recording = await _screen_recording_access()
 
     return text_result(
-        json.dumps(
+        encode_payload(
             {
                 "accessibility": _describe_permission(
                     accessibility,
@@ -1084,7 +1120,7 @@ async def handle_check_permissions(args: dict) -> types.CallToolResult:
                 "noPermissionNeeded": ALWAYS_AVAILABLE,
                 "note": "Automation is granted per target application. System Events covers windows, menus and keyboard; reading browser tabs prompts once per browser on first use.",
             },
-            indent=2,
+            tool="check_permissions",
         )
     )
 
