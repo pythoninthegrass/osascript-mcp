@@ -7,10 +7,10 @@ on:
   workflow_dispatch:
 
 jobs:
-  test:
-    # macOS only: the integration suite drives real windows, menus, the
-    # clipboard and screencapture.
-    runs-on: macos-latest
+  unit:
+    # ubuntu-latest: unit tests are pure functions with no macOS side
+    # effects, so lint/unit run cheaply on every push and PR.
+    runs-on: ubuntu-latest
 
     strategy:
       fail-fast: false
@@ -19,7 +19,7 @@ jobs:
         # during the uv scaffold), so 3.12 isn't installable here.
         python: ["3.13"]
 
-    name: python ${{ matrix.python }}
+    name: unit (python ${{ matrix.python }})
 
     steps:
       - uses: actions/checkout@v4
@@ -38,6 +38,31 @@ jobs:
 
       - name: Run unit tests
         run: uv run pytest -m unit -n auto
+
+  integration:
+    # macOS-only, manual trigger only: the integration suite drives real
+    # windows, menus, the clipboard and screencapture, and macos-latest
+    # runners are far costlier than ubuntu-latest, so this doesn't run on
+    # every push/PR — trigger it manually from the Actions tab when needed.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: macos-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        python: ["3.13"]
+
+    name: integration (python ${{ matrix.python }})
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          python-version: ${{ matrix.python }}
+
+      - run: uv sync --frozen
 
       - name: Run integration tests
         run: uv run pytest -m integration
