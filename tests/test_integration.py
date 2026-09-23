@@ -569,7 +569,7 @@ async def test_screenshot_window_mode_resolves_frontmost_app(session):
             "screenshot",
             {"mode": "window", "app": front_name, "path": "/tmp/mcp-test-window.png", "overwrite": True},
         )
-        assert not r.is_error or "No windows found" in text(r)
+        assert not r.is_error or "No windows found" in text(r) or "permission" in text(r)
 
 
 # ---------------------------------------------------------------------------

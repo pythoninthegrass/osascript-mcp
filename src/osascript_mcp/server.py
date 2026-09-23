@@ -93,6 +93,41 @@ ACCESSIBILITY_MSG = (
     "Terminal/Claude) in System Settings > Privacy & Security > Accessibility."
 )
 
+SCREEN_RECORDING_MSG = (
+    "Screen Recording permission required. Grant access to the app that runs this server "
+    "(Terminal/iTerm/Claude) in System Settings > Privacy & Security > Screen Recording."
+)
+
+# screencapture prints these exact fragments to stderr when Screen Recording access is denied
+# (observed on macOS; there is no dedicated exit code or machine-readable error for this case).
+_SCREENCAPTURE_DENIAL_FRAGMENTS = (
+    "could not create image from display",
+    "could not create image from window",
+    "could not create image from rect",
+)
+
+
+async def _screen_recording_access() -> bool | None:
+    r = await executor.execute_script(
+        """
+    ObjC.import("CoreGraphics");
+    var ok = null;
+    try {
+      ObjC.bindFunction("CGPreflightScreenCaptureAccess", ["bool", []]);
+      ok = $.CGPreflightScreenCaptureAccess();
+    } catch (e) { ok = null; }
+    JSON.stringify({ ok: ok });
+    """,
+        "javascript",
+        10000,
+    )
+    if r["exit_code"] != 0:
+        return None
+    try:
+        return json.loads(r["stdout"].strip())["ok"]
+    except (json.JSONDecodeError, KeyError):
+        return None
+
 
 async def run_shell(cmd: str, args: list[str], timeout_ms: float = 10000) -> dict:
     try:
@@ -821,6 +856,14 @@ async def handle_get_displays(args: dict) -> types.CallToolResult:
     return text_result(r["stdout"].strip())
 
 
+async def _screenshot_error_result(err_text: str) -> types.CallToolResult:
+    # screencapture's stderr gives no machine-readable signal for a Screen Recording
+    # denial, so match its known failure text and confirm against the real TCC state.
+    if any(fragment in err_text for fragment in _SCREENCAPTURE_DENIAL_FRAGMENTS) and await _screen_recording_access() is False:
+        return error_result(SCREEN_RECORDING_MSG)
+    return error_result(f"Screenshot failed: {err_text}")
+
+
 async def handle_screenshot(args: dict) -> types.CallToolResult:
     valid_modes = ["fullscreen", "region", "window"]
     valid_formats = ["png", "jpg"]
@@ -909,7 +952,7 @@ async def handle_screenshot(args: dict) -> types.CallToolResult:
         shell_args.append("-c")
         r = await run_shell(BIN_SCREENCAPTURE, shell_args)
         if not r["ok"]:
-            return error_result(f"Screenshot failed: {r['error']}")
+            return await _screenshot_error_result(r["error"])
         return text_result(f"Screenshot copied to the clipboard ({mode}). This replaced the previous clipboard contents.")
 
     file_path = args.get("path") or os.path.join(tempfile.gettempdir(), f"screenshot-{int(time.time() * 1000)}.{fmt}")
@@ -932,9 +975,9 @@ async def handle_screenshot(args: dict) -> types.CallToolResult:
     shell_args.extend(["-t", fmt, "--", file_path])
     r = await run_shell(BIN_SCREENCAPTURE, shell_args)
     if not r["ok"]:
-        return error_result(f"Screenshot failed: {r['error']}")
+        return await _screenshot_error_result(r["error"])
     if r["stderr"]:
-        return error_result(f"Screenshot failed: {safe_error(r['stderr'])}")
+        return await _screenshot_error_result(safe_error(r["stderr"]))
     try:
         stat = os.stat(file_path)
     except OSError:
@@ -983,25 +1026,7 @@ async def handle_check_permissions(args: dict) -> types.CallToolResult:
         automation = None
         accessibility = None
 
-    screen_recording = None
-    sr = await executor.execute_script(
-        """
-    ObjC.import("CoreGraphics");
-    var ok = null;
-    try {
-      ObjC.bindFunction("CGPreflightScreenCaptureAccess", ["bool", []]);
-      ok = $.CGPreflightScreenCaptureAccess();
-    } catch (e) { ok = null; }
-    JSON.stringify({ ok: ok });
-    """,
-        "javascript",
-        10000,
-    )
-    if sr["exit_code"] == 0:
-        try:
-            screen_recording = json.loads(sr["stdout"].strip())["ok"]
-        except (json.JSONDecodeError, KeyError):
-            pass
+    screen_recording = await _screen_recording_access()
 
     return text_result(
         json.dumps(
