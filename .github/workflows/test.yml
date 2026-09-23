@@ -3,7 +3,19 @@ name: Tests
 on:
   push:
     branches: [main]
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test.yml"
   pull_request:
+    paths:
+      - "src/**/*.py"
+      - "tests/**/*.py"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/test.yml"
   workflow_dispatch:
 
 jobs:
