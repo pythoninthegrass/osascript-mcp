@@ -3,9 +3,10 @@ id: TASK-001.14
 title: >-
   press_key has no digit-safe key_code path (reproduces docs/osascript.md's
   keystroke-digit-corruption bug)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-23 02:34'
+updated_date: '2026-09-23 02:39'
 labels:
   - python-port
 dependencies:
@@ -31,7 +32,13 @@ Fix: extend `KEY_CODES` with digit entries (`"0"`-`"9"` -> the doc's table: 1=18
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 `press_key({"key": "<digit>"})` for 0-9 emits `key code <n>` (the doc's table), not `keystroke "<digit>"`
-- [ ] #2 A unit test covers all 10 digits and asserts the AppleScript action string uses `key code`
-- [ ] #3 README/tool description mentions digits are handled via key code, if worth calling out
+- [x] #1 `press_key({"key": "<digit>"})` for 0-9 emits `key code <n>` (the doc's table), not `keystroke "<digit>"`
+- [x] #2 A unit test covers all 10 digits and asserts the AppleScript action string uses `key code`
+- [x] #3 README/tool description mentions digits are handled via key code, if worth calling out
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+Added digit entries (0-9) to KEY_CODES in server.py per docs/osascript.md's table, so press_key routes digits through `key code` instead of falling through to `keystroke`. Added a parametrized unit test (TestPressKeyDigits) covering all 10 digits, asserting the AppleScript action uses key code and never keystroke. Updated the press_key tool description to document the digit key_code behavior.
+<!-- SECTION:FINAL_SUMMARY:END -->

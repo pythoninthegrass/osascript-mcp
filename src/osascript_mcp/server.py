@@ -408,6 +408,16 @@ KEY_CODES = {
     "f10": 109,
     "f11": 103,
     "f12": 111,
+    "0": 29,
+    "1": 18,
+    "2": 19,
+    "3": 20,
+    "4": 21,
+    "5": 23,
+    "6": 22,
+    "7": 26,
+    "8": 28,
+    "9": 25,
 }
 VALID_MODIFIERS = ["command", "option", "control", "shift"]
 
@@ -1238,8 +1248,9 @@ TOOLS.extend(
             description=(
                 "Press a single key, optionally with modifiers, in the frontmost application. Accepts any single "
                 "character, or a named key: return, enter, tab, space, delete, escape, up, down, left, right, "
-                "home, end, page_up, page_down, f1-f12. Requires Accessibility permission. To enter text use "
-                "type_text instead."
+                "home, end, page_up, page_down, f1-f12, 0-9. Digits 0-9 are sent via key code (not keystroke) "
+                "to avoid corruption in keystroke-sensitive consoles. Requires Accessibility permission. To "
+                "enter text use type_text instead."
             ),
             input_schema={
                 "type": "object",

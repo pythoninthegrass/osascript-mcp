@@ -159,3 +159,33 @@ class TestDispatch:
     async def test_list_tools_returns_tools(self):
         result = await server.handle_list_tools(None, None)
         assert result.tools == server.TOOLS
+
+
+class TestPressKeyDigits:
+    @pytest.mark.parametrize(
+        "digit,code",
+        [
+            ("0", 29),
+            ("1", 18),
+            ("2", 19),
+            ("3", 20),
+            ("4", 21),
+            ("5", 23),
+            ("6", 22),
+            ("7", 26),
+            ("8", 28),
+            ("9", 25),
+        ],
+    )
+    async def test_digit_routes_through_key_code(self, monkeypatch, digit, code):
+        captured = {}
+
+        async def fake_run_as(script):
+            captured["script"] = script
+            return {"ok": True, "stdout": ""}
+
+        monkeypatch.setattr(server, "run_as", fake_run_as)
+        result = await server.handle_press_key({"key": digit})
+        assert f"key code {code}" in captured["script"]
+        assert "keystroke" not in captured["script"]
+        assert result.is_error is False
