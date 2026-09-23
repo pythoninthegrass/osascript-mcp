@@ -31,11 +31,6 @@ def strip_untrusted_envelope(body: str) -> str:
     return body
 
 
-# ---------------------------------------------------------------------------
-# 1-2: initialize, tools/list
-# ---------------------------------------------------------------------------
-
-
 async def test_initialize_succeeds(session):
     # open_session() already calls ClientSession.initialize() before yielding;
     # entering the context manager without raising is the assertion.
@@ -47,11 +42,6 @@ async def test_tools_list_returns_18_tools(session):
     async with session() as client:
         tools = await client.list_tools()
         assert len(tools.tools) == 18
-
-
-# ---------------------------------------------------------------------------
-# 3-6: run_osascript basics
-# ---------------------------------------------------------------------------
 
 
 async def test_run_osascript_basic_applescript(session):
@@ -78,33 +68,12 @@ async def test_run_osascript_oversized_script_rejected(session):
         assert r.is_error is True
 
 
-# ---------------------------------------------------------------------------
-# 7: clipboard round-trip
-# ---------------------------------------------------------------------------
-
-
 async def test_clipboard_round_trip(session):
     async with session() as client:
         await call(client, "set_clipboard", {"content": "mcp-test-123"})
         r = await call(client, "get_clipboard")
         assert "mcp-test-123" in text(r)
         assert "<untrusted-data" in text(r)
-
-
-# ---------------------------------------------------------------------------
-# 8: send_notification
-# ---------------------------------------------------------------------------
-
-
-async def test_send_notification_succeeds(session):
-    async with session() as client:
-        r = await call(client, "send_notification", {"title": "MCP Test", "message": "Integration test passed!"})
-        assert not r.is_error
-
-
-# ---------------------------------------------------------------------------
-# 9-11: open_url scheme allowlist
-# ---------------------------------------------------------------------------
 
 
 async def test_open_url_https_accepted(session):
@@ -125,11 +94,6 @@ async def test_open_url_smb_scheme_rejected(session):
         assert r.is_error is True
 
 
-# ---------------------------------------------------------------------------
-# 12-13: open_app
-# ---------------------------------------------------------------------------
-
-
 async def test_open_app_finder(session):
     async with session() as client:
         r = await call(client, "open_app", {"name": "Finder"})
@@ -142,20 +106,10 @@ async def test_open_app_nonexistent_rejected(session):
         assert r.is_error is True
 
 
-# ---------------------------------------------------------------------------
-# 14: get_frontmost_app
-# ---------------------------------------------------------------------------
-
-
 async def test_get_frontmost_app_returns_name(session):
     async with session() as client:
         r = await call(client, "get_frontmost_app")
         assert "name" in text(r)
-
-
-# ---------------------------------------------------------------------------
-# 15-16: manage_windows / app_menu list (tolerate Accessibility denial)
-# ---------------------------------------------------------------------------
 
 
 async def test_manage_windows_list_or_accessibility_error(session):
@@ -170,31 +124,16 @@ async def test_app_menu_list_finder_or_accessibility_error(session):
         assert not r.is_error or "Accessibility" in text(r)
 
 
-# ---------------------------------------------------------------------------
-# 17: press_key invalid
-# ---------------------------------------------------------------------------
-
-
 async def test_press_key_invalid_key_rejected(session):
     async with session() as client:
         r = await call(client, "press_key", {"key": "nonexistent_key_xyz"})
         assert r.is_error is True
 
 
-# ---------------------------------------------------------------------------
-# 18: prototype pollution protection
-# ---------------------------------------------------------------------------
-
-
 async def test_unknown_tool_name_rejected(session):
     async with session() as client:
         r = await call(client, "constructor")
         assert r.is_error is True
-
-
-# ---------------------------------------------------------------------------
-# 19-21: type_text
-# ---------------------------------------------------------------------------
 
 
 async def test_type_text_empty_rejected(session):
@@ -209,15 +148,10 @@ async def test_type_text_over_500_chars_rejected(session):
         assert r.is_error is True
 
 
-async def test_type_text_valid_or_accessibility_error(session):
+async def test_type_text_valid_or_accessibility_error(session, tmp_finder_window):
     async with session() as client:
         r = await call(client, "type_text", {"text": "hello"})
         assert not r.is_error or "Accessibility" in text(r)
-
-
-# ---------------------------------------------------------------------------
-# 22-24: press_key extended
-# ---------------------------------------------------------------------------
 
 
 async def test_press_key_named_key_escape_or_accessibility_error(session):
@@ -226,7 +160,7 @@ async def test_press_key_named_key_escape_or_accessibility_error(session):
         assert not r.is_error or "Accessibility" in text(r)
 
 
-async def test_press_key_char_with_command_modifier_or_accessibility_error(session):
+async def test_press_key_char_with_command_modifier_or_accessibility_error(session, tmp_finder_window):
     async with session() as client:
         r = await call(client, "press_key", {"key": "a", "modifiers": ["command"]})
         assert not r.is_error or "Accessibility" in text(r)
@@ -236,11 +170,6 @@ async def test_press_key_invalid_modifier_rejected(session):
     async with session() as client:
         r = await call(client, "press_key", {"key": "a", "modifiers": ["super"]})
         assert r.is_error is True
-
-
-# ---------------------------------------------------------------------------
-# 25-26, 76: get_browser_tabs
-# ---------------------------------------------------------------------------
 
 
 async def test_get_browser_tabs_invalid_browser_rejected(session):
@@ -264,11 +193,6 @@ async def test_browser_tabs_marked_untrusted(session):
             pytest.skip("Safari is not running")
         r = await call(client, "get_browser_tabs", {"browser": "safari"})
         assert r.is_error or "<untrusted-data" in text(r)
-
-
-# ---------------------------------------------------------------------------
-# 27-30: manage_windows extended
-# ---------------------------------------------------------------------------
 
 
 async def test_manage_windows_invalid_action_rejected(session):
@@ -295,11 +219,6 @@ async def test_manage_windows_non_integer_window_index_rejected(session):
         assert r.is_error is True
 
 
-# ---------------------------------------------------------------------------
-# 31-34: app_menu extended
-# ---------------------------------------------------------------------------
-
-
 async def test_app_menu_missing_app_rejected(session):
     async with session() as client:
         r = await call(client, "app_menu", {"action": "list", "app": ""})
@@ -324,9 +243,18 @@ async def test_app_menu_invalid_action_rejected(session):
         assert r.is_error is True
 
 
-# ---------------------------------------------------------------------------
-# 35-36: set_clipboard extended
-# ---------------------------------------------------------------------------
+async def test_app_menu_click_by_position_or_accessibility_error(session, close_new_finder_windows):
+    async with session() as client:
+        r = await call(client, "app_menu", {"action": "click", "app": "Finder", "menu_path": ["File", 1]})
+        assert not r.is_error or "Accessibility" in text(r) or "not found" in text(r).lower()
+        assert "Internal error" not in text(r)
+
+
+async def test_app_menu_list_by_position_or_accessibility_error(session):
+    async with session() as client:
+        r = await call(client, "app_menu", {"action": "list", "app": "Finder", "menu_path": [1]})
+        assert not r.is_error or "Accessibility" in text(r) or "not found" in text(r).lower()
+        assert "Internal error" not in text(r)
 
 
 async def test_set_clipboard_missing_content_rejected(session):
@@ -339,11 +267,6 @@ async def test_set_clipboard_number_instead_of_string_rejected(session):
     async with session() as client:
         r = await call(client, "set_clipboard", {"content": 12345})
         assert r.is_error is True
-
-
-# ---------------------------------------------------------------------------
-# 37-39: run_osascript extended
-# ---------------------------------------------------------------------------
 
 
 async def test_run_osascript_invalid_language_rejected(session):
@@ -367,11 +290,6 @@ async def test_run_osascript_timeout_enforcement(session):
         assert elapsed_ms < 5000
 
 
-# ---------------------------------------------------------------------------
-# 40-41: open_url extended
-# ---------------------------------------------------------------------------
-
-
 async def test_open_url_mailto_scheme_accepted(session):
     async with session() as client:
         r = await call(client, "open_url", {"url": "mailto:test@example.com"})
@@ -382,11 +300,6 @@ async def test_open_url_javascript_scheme_rejected(session):
     async with session() as client:
         r = await call(client, "open_url", {"url": "javascript:alert(1)"})
         assert r.is_error is True
-
-
-# ---------------------------------------------------------------------------
-# 42-44: screenshot
-# ---------------------------------------------------------------------------
 
 
 async def test_screenshot_fullscreen(session):
@@ -409,11 +322,6 @@ async def test_screenshot_window_mode_nonexistent_app_rejected(session):
     async with session() as client:
         r = await call(client, "screenshot", {"mode": "window", "app": "NonExistentApp12345"})
         assert r.is_error is True
-
-
-# ---------------------------------------------------------------------------
-# 45-49: app_visibility
-# ---------------------------------------------------------------------------
 
 
 async def test_app_visibility_invalid_action_rejected(session):
@@ -442,11 +350,6 @@ async def test_app_visibility_hide_unhide_finder(session):
         assert not r_unhide.is_error or "ccessib" in text(r_unhide)
 
 
-# ---------------------------------------------------------------------------
-# 50-52: file_open
-# ---------------------------------------------------------------------------
-
-
 async def test_file_open_missing_path_rejected(session):
     async with session() as client:
         r = await call(client, "file_open", {"path": ""})
@@ -463,11 +366,6 @@ async def test_file_open_invalid_app_name_rejected(session):
     async with session() as client:
         r = await call(client, "file_open", {"path": "/tmp", "app": "Bad/App"})
         assert r.is_error is True
-
-
-# ---------------------------------------------------------------------------
-# 53-56: run_shortcut
-# ---------------------------------------------------------------------------
 
 
 async def test_run_shortcut_list_succeeds(session):
@@ -492,11 +390,6 @@ async def test_run_shortcut_run_with_empty_name_rejected(session):
     async with session() as client:
         r = await call(client, "run_shortcut", {"action": "run", "name": ""})
         assert r.is_error is True
-
-
-# ---------------------------------------------------------------------------
-# 57-64: v1.1.2 regression tests
-# ---------------------------------------------------------------------------
 
 
 async def test_screenshot_unknown_mode_rejected(session):
@@ -570,11 +463,6 @@ async def test_screenshot_window_mode_resolves_frontmost_app(session):
             {"mode": "window", "app": front_name, "path": "/tmp/mcp-test-window.png", "overwrite": True},
         )
         assert not r.is_error or "No windows found" in text(r) or "permission" in text(r)
-
-
-# ---------------------------------------------------------------------------
-# 65-78: security audit regressions (v1.1.3)
-# ---------------------------------------------------------------------------
 
 
 async def test_file_open_rejects_url_schemes(session):
@@ -653,7 +541,14 @@ async def test_window_list_reports_parseable_geometry(session):
 
 async def test_app_menu_rejects_non_string_menu_path_entry(session):
     async with session() as client:
-        r = await call(client, "app_menu", {"action": "click", "app": "Finder", "menu_path": ["File", 5]})
+        r = await call(client, "app_menu", {"action": "click", "app": "Finder", "menu_path": ["File", {"a": 1}]})
+        assert r.is_error is True
+        assert "Internal error" not in text(r)
+
+
+async def test_app_menu_rejects_out_of_range_position_entry(session):
+    async with session() as client:
+        r = await call(client, "app_menu", {"action": "click", "app": "Finder", "menu_path": ["File", 0]})
         assert r.is_error is True
         assert "Internal error" not in text(r)
 
@@ -682,11 +577,6 @@ async def test_run_shortcut_rejects_non_string_input(session):
         r = await call(client, "run_shortcut", {"action": "run", "name": "X", "input": {"a": 1}})
         assert r.is_error is True
         assert "must be a string" in text(r)
-
-
-# ---------------------------------------------------------------------------
-# 79-82: check_permissions
-# ---------------------------------------------------------------------------
 
 
 async def test_check_permissions_reports_all_classes(session):

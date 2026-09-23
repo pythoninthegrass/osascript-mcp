@@ -1,3 +1,4 @@
+import asyncio
 import os
 import pytest
 import sys
@@ -45,3 +46,59 @@ async def open_session():
 @pytest.fixture
 def session():
     return open_session
+
+
+async def _osascript(script: str) -> str:
+    proc = await asyncio.create_subprocess_exec(
+        "/usr/bin/osascript",
+        "-e",
+        script,
+        stdout=asyncio.subprocess.PIPE,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stdout, _ = await proc.communicate()
+    return stdout.decode().strip()
+
+
+@pytest.fixture
+async def tmp_finder_window():
+    """Open a scratch Finder window on /tmp and bring it frontmost, so a global
+    keystroke a test sends (Cmd+A, type-ahead select) lands on throwaway /tmp
+    contents instead of whatever the user actually has focused (e.g. the Desktop)."""
+    window_id = await _osascript(
+        'tell application "Finder"\n'
+        '  set w to make new Finder window to (POSIX file "/tmp" as alias)\n'
+        "  activate\n"
+        "  return id of w as string\n"
+        "end tell"
+    )
+    try:
+        yield
+    finally:
+        if window_id:
+            await _osascript(f'tell application "Finder" to close window id {window_id}')
+
+
+async def _finder_window_ids() -> set[str]:
+    raw = await _osascript(
+        'tell application "Finder"\n'
+        "  set idList to id of every window\n"
+        '  set AppleScript\'s text item delimiters to ","\n'
+        "  set idString to idList as string\n"
+        '  set AppleScript\'s text item delimiters to ""\n'
+        "  return idString\n"
+        "end tell"
+    )
+    return {part.strip() for part in raw.split(",") if part.strip()}
+
+
+@pytest.fixture
+async def close_new_finder_windows():
+    """Snapshot Finder's window ids before the test and close only whatever new
+    window id(s) appear after, so a test that triggers something like "New Finder
+    Window" doesn't leave a stray window behind or touch the user's own windows."""
+    before = await _finder_window_ids()
+    yield
+    after = await _finder_window_ids()
+    for window_id in after - before:
+        await _osascript(f'tell application "Finder" to close window id {window_id}')
