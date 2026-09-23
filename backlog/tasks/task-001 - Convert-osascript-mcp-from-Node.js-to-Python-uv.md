@@ -1,9 +1,10 @@
 ---
 id: TASK-001
 title: Convert osascript-mcp from Node.js to Python (uv)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-22 23:03'
+updated_date: '2026-09-23 04:41'
 labels: []
 dependencies: []
 ordinal: 1000
@@ -17,8 +18,8 @@ Port the Node stdio MCP server (server/executor.js, server/index.js, server/test
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 All 18 tools ported with identical names, descriptions, and inputSchemas
-- [ ] #2 Integration suite (ported from server/test.js) passes against the Python server
-- [ ] #3 Node implementation and packaging (server/, package*.json, manifest.json, server.json, .mcpbignore, glama.json) removed
-- [ ] #4 CI runs uv sync, ruff, and pytest on macos-latest
+- [x] #1 All 18 tools ported with identical names, descriptions, and inputSchemas
+- [x] #2 Integration suite (ported from server/test.js) passes against the Python server
+- [x] #3 Node implementation and packaging (server/, package*.json, manifest.json, server.json, .mcpbignore, glama.json) removed
+- [x] #4 CI runs uv sync, ruff, and pytest on macos-latest
 <!-- AC:END -->
