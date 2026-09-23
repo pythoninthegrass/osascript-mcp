@@ -1,20 +1,4 @@
-<div align="center">
-
-<img src="assets/banner.png" alt="mcp-osascript" width="100%">
-
 **Let Claude control your Mac.** Move windows, click menus, type text, read clipboard, manage browser tabs, take screenshots, run Shortcuts — 18 typed tools with input validation and security guardrails.
-
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](https://support.apple.com/macos)
-[![Python 3.13+](https://img.shields.io/badge/python-3.13%2B-green)](https://www.python.org)
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
-[![Tests: 176 passed](https://img.shields.io/badge/tests-176%20passed-brightgreen)](#testing)
-[![Tests](https://github.com/pythoninthegrass/osascript-mcp/actions/workflows/test.yml/badge.svg)](https://github.com/pythoninthegrass/osascript-mcp/actions/workflows/test.yml)
-
-</div>
-
----
-
-![Demo](assets/demo.gif)
 
 ## Quick Start
 
