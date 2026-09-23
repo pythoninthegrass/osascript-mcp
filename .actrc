@@ -1,0 +1,15 @@
+# act configuration for local GitHub Actions testing
+# Ref: https://nektosact.com/
+
+# macos-latest jobs (test.yml) need real macOS APIs (windows, clipboard,
+# screencapture) that no Docker image can provide — run natively on host.
+-P macos-latest=-self-hosted
+
+# ubuntu-latest jobs (release-please.yml) use catthehacker's image.
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+
+# Match host architecture (Apple Silicon)
+--container-architecture=linux/arm64
+
+# Reuse containers for faster subsequent runs
+--reuse
