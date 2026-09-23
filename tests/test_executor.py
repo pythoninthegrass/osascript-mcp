@@ -1,6 +1,5 @@
 import asyncio
 import os
-import platform
 import pytest
 import signal
 import time
@@ -155,7 +154,7 @@ class TestClassifyError:
         assert result["code"] == "ERR_UNKNOWN"
 
 
-@pytest.mark.skipif(platform.system() != "Darwin", reason="requires real /usr/bin/osascript")
+@pytest.mark.requires_osascript
 class TestExecuteScript:
     async def test_runs_applescript_and_returns_stdout(self):
         result = await execute_apple_script('return "hi"')

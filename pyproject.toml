@@ -45,6 +45,7 @@ asyncio_mode = "auto"
 markers = [
     "unit: marks tests as unit tests",
     "integration: marks tests as integration tests",
+    "requires_osascript: marks unit tests that spawn the real /usr/bin/osascript binary",
 ]
 addopts = [
     "--strict-markers",

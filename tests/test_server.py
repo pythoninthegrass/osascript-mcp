@@ -1,5 +1,4 @@
 import json
-import platform
 import pytest
 import toon_format
 from hypothesis import given, strategies as st
@@ -140,7 +139,7 @@ class TestEncodePayload:
         assert toon_format.decode(toon_format.encode(tabs)) == tabs
 
 
-@pytest.mark.skipif(platform.system() != "Darwin", reason="requires real /usr/bin/osascript")
+@pytest.mark.requires_osascript
 class TestRunAs:
     async def test_success(self):
         r = await server.run_as('return "hi"')
