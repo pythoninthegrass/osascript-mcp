@@ -4,8 +4,7 @@
   "include-component-in-tag": false,
   "packages": {
     ".": {
-      "changelog-path": "CHANGELOG.md",
-      "release-as": "1.2.0"
+      "changelog-path": "CHANGELOG.md"
     }
   }
 }
