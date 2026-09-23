@@ -1,0 +1,50 @@
+# yaml-language-server: $schema=https://taskfile.dev/schema.json
+
+version: "3.0"
+
+set: ['e', 'u', 'pipefail']
+shopt: ['globstar']
+
+env:
+  VENV_DIR: "{{.ROOT_DIR}}/.venv"
+  PATH: "{{.VENV_DIR}}/bin:{{.PATH}}"
+
+includes:
+  uv:
+    taskfile: ./taskfiles/uv.yml
+
+tasks:
+  default:
+    desc: "Default task"
+    cmds:
+      - task --list
+
+  pre-commit:
+    desc: "Run pre-commit hooks"
+    cmds:
+      - pre-commit run --all-files
+
+  lint:
+    desc: "Run linters"
+    cmds:
+      - ruff check --fix --respect-gitignore
+
+  format:
+    desc: "Run formatters"
+    cmds:
+      - ruff format --respect-gitignore
+
+  test:
+    desc: "Run all tests"
+    cmds:
+      - pytest -v
+
+  test:unit:
+    desc: "Run unit tests"
+    cmds:
+      - pytest -v -m unit -n auto
+
+  test:integration:
+    desc: "Run integration tests"
+    cmds:
+      - pytest -v -m integration

@@ -1,0 +1,4 @@
+aqua:nektos/act 0.2.89
+python          3.13.6
+ruff            0.15.20
+uv              0.8.8

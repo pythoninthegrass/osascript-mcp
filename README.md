@@ -1,43 +1,21 @@
-<div align="center">
-
-<img src="assets/banner.png" alt="mcp-osascript" width="100%">
-
 **Let Claude control your Mac.** Move windows, click menus, type text, read clipboard, manage browser tabs, take screenshots, run Shortcuts — 18 typed tools with input validation and security guardrails.
-
-[![npm version](https://img.shields.io/npm/v/mcp-osascript)](https://www.npmjs.com/package/mcp-osascript)
-[![macOS 13+](https://img.shields.io/badge/macOS-13%2B-blue)](https://support.apple.com/macos)
-[![Node 18+](https://img.shields.io/badge/node-18%2B-green)](https://nodejs.org)
-[![License: MIT](https://img.shields.io/badge/license-MIT-yellow)](LICENSE)
-[![Tests: 84 passed](https://img.shields.io/badge/tests-84%20passed-brightgreen)](#testing)
-[![Tests](https://github.com/m0rvayne/mcp-osascript/actions/workflows/test.yml/badge.svg)](https://github.com/m0rvayne/mcp-osascript/actions/workflows/test.yml)
-[![m0rvayne/mcp-osascript MCP server](https://glama.ai/mcp/servers/m0rvayne/mcp-osascript/badges/score.svg)](https://glama.ai/mcp/servers/m0rvayne/mcp-osascript)
-
-Listed in the [official MCP Registry](https://registry.modelcontextprotocol.io) as `io.github.m0rvayne/mcp-osascript`
-
-</div>
-
----
-
-![Demo](assets/demo.gif)
 
 ## Quick Start
 
-**Claude Desktop — one click.** Download [`mcp-osascript-1.1.3.mcpb`](https://github.com/m0rvayne/mcp-osascript/releases/latest) from the latest release and double-click it. Claude Desktop installs the extension itself.
-
-**Or add it to the config manually:**
+Requires [uv](https://docs.astral.sh/uv/). Add this to your Claude Desktop config (`Settings → Developer → Edit Config`):
 
 ```json
 {
   "mcpServers": {
     "osascript": {
-      "command": "npx",
-      "args": ["-y", "mcp-osascript"]
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/pythoninthegrass/osascript-mcp", "osascript-mcp"]
     }
   }
 }
 ```
 
-Add this to your Claude Desktop config (`Settings → Developer → Edit Config`), restart Claude, and you're ready.
+Restart Claude, and you're ready.
 
 <details>
 <summary>Config for other clients (Cursor, VS Code, Claude Code)</summary>
@@ -47,8 +25,8 @@ Add this to your Claude Desktop config (`Settings → Developer → Edit Config`
 {
   "mcpServers": {
     "osascript": {
-      "command": "npx",
-      "args": ["-y", "mcp-osascript"]
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/pythoninthegrass/osascript-mcp", "osascript-mcp"]
     }
   }
 }
@@ -56,14 +34,14 @@ Add this to your Claude Desktop config (`Settings → Developer → Edit Config`
 
 **Claude Code**
 ```bash
-claude mcp add osascript -- npx -y mcp-osascript
+claude mcp add osascript -- uvx --from git+https://github.com/pythoninthegrass/osascript-mcp osascript-mcp
 ```
 
 **From source (development)**
 ```bash
-git clone https://github.com/m0rvayne/mcp-osascript.git
-cd mcp-osascript && npm install
-# then use: "command": "node", "args": ["/path/to/mcp-osascript/server/index.js"]
+git clone https://github.com/pythoninthegrass/osascript-mcp.git
+cd osascript-mcp && uv sync
+# then use: "command": "uv", "args": ["run", "--directory", "/path/to/osascript-mcp", "osascript-mcp"]
 ```
 </details>
 
@@ -105,13 +83,39 @@ Once installed, ask Claude:
 | `get_browser_tabs` | List tabs in Safari, Chrome, or Arc | Automation |
 | `type_text` | Type text into active app (max 500 chars) | Accessibility |
 | `press_key` | Press key with modifiers (cmd+c, return, f5) | Accessibility |
-| `manage_windows` | List / move / resize / minimize / fullscreen / close | Accessibility |
+| `manage_windows` | List (flat `x`/`y`/`width`/`height` fields) / move / resize / minimize / fullscreen / close | Accessibility |
 | `get_displays` | List monitors — position, size, which is main | None |
 | `app_menu` | List or click menu items in any app | Accessibility |
 | `screenshot` | Capture full screen, a region, or an app window | Screen Recording |
 | `app_visibility` | Hide, unhide, or quit an application | Accessibility |
 | `file_open` | Open a file or folder, optionally in a given app | None |
 | `run_shortcut` | List or run Apple Shortcuts | None |
+
+## Output Format
+
+Structured results (window lists, browser tabs, menu items, `check_permissions`, ...) are
+minified JSON by default — no dependency risk, no whitespace tax:
+
+```
+{"app":"Finder","windows":[{"index":1,"title":"Downloads","x":0,"y":0,"width":900,"height":600}]}
+```
+
+Set `OSASCRIPT_MCP_FORMAT=toon` to switch to [TOON](https://github.com/toon-format/toon)
+(compact, tabular) encoding instead:
+
+```
+app: Finder
+windows[1]{index,title,x,y,width,height}:
+  1,Downloads,0,0,900,600
+```
+
+TOON was evaluated as the default (TASK-001.13): measured against real captured payloads
+from this server it beat minified JSON by only ~13% overall, and was an outright regression
+on small flat arrays like `app_menu`'s menu-item lists — not enough margin to justify a new
+dependency as the default. It stays available for clients that want it and for payloads that
+are large and uniformly tabular (long window/tab lists). `OSASCRIPT_MCP_FORMAT=json` restores
+pretty-printed JSON for debugging. `bench/replay.py` reproduces the measurement against any
+captured session (see `OSASCRIPT_MCP_CAPTURE` below).
 
 ## Self-Correcting Menus
 
@@ -133,12 +137,12 @@ Server: "Clicked: File > Export as PDF..."
 |---|:---:|:---:|:---:|
 | Typed tools with validation | **18** | 2 (generic) | 1 (generic) |
 | URL scheme allowlist | **http/https/mailto** | No | No |
-| Env isolation (child process) | **PATH+HOME+LANG only** | Full process.env | Full process.env |
+| Env isolation (child process) | **PATH+HOME+LANG only** | Full process env | Full process env |
 | Process group kill (no orphans) | **SIGTERM→SIGKILL** | No | No |
 | Error sanitization (paths, tokens) | **Yes** | No | No |
-| Prototype pollution protection | **Object.create(null)** | No | No |
+| Unknown-tool dispatch guard | **Yes** | No | No |
 | Self-correcting menu click | **Yes** | No | No |
-| Integration tests | **84** | 0 | 0 |
+| Test suite | **176 (unit + integration)** | 0 | 0 |
 | Runs tests in CI | **Yes** | No | No |
 | Red-team audit passes | **4** | 0 | 0 |
 | Untrusted-output fencing | **Yes** | No | No |
@@ -179,10 +183,22 @@ in System Settings > Privacy & Security > Accessibility."
 ## Testing
 
 ```bash
-npm test
+uv run pytest -m unit          # 95 unit + hypothesis property tests, no macOS side effects
+uv run pytest -m integration   # 81 integration tests against the real server
 ```
 
-84 integration tests covering all 18 tools — input validation, security boundaries (URL scheme blocking, prototype pollution, script size limits), timeout enforcement, permission error handling, and regressions for every finding of the security audit.
+The integration suite drives real windows, menus, the clipboard and `screencapture`, so it changes
+local machine state (clipboard contents, may press keys, open apps, show notifications) and needs
+Accessibility/Automation/Screen Recording permissions granted to whatever runs it (Terminal,
+Claude Desktop) for full coverage — cases gated on a missing permission tolerate that outcome
+rather than failing. `OSASCRIPT_MCP_FORMAT=toon` (or `json`) re-runs the same suite against the
+other output encodings.
+
+Set `OSASCRIPT_MCP_CAPTURE=/path/to/file.jsonl` to have the server append every structured
+result to that file as `{"tool": ..., "payload": ...}` — off unless set, no effect on the
+response sent to the client. `uv run python bench/replay.py /path/to/file.jsonl` replays a
+capture through each encoding and reports token counts per tool, which is how the numbers in
+[Output Format](#output-format) were produced.
 
 <details>
 <summary>Security & Architecture</summary>
@@ -195,7 +211,7 @@ npm test
 - Error messages sanitized — filesystem paths, tokens, and passwords are stripped.
 - Child processes get minimal env: `PATH`, `HOME`, `LANG` only — no API keys or secrets leak.
 - URL scheme allowlist — `file://`, `smb://`, `vnc://`, `javascript:` all blocked.
-- Handler dispatch uses `Object.create(null)` — no prototype pollution.
+- Handler dispatch is a plain dict keyed by exact tool name — an unknown or forged name never resolves to a handler.
 - Externally-sourced text (browser tab titles, window titles, menu items, clipboard) is returned inside an explicit `<untrusted-data>` envelope, so a web page that renames itself cannot smuggle instructions into the model's context.
 - `file_open` refuses anything that parses as a URL — `open(1)` resolves URLs as well as paths, so without that check it would quietly annul `open_url`'s scheme allowlist.
 - `screenshot` never overwrites an existing file unless `overwrite: true`, and the extension must match the format.
@@ -205,7 +221,7 @@ npm test
 
 - Process group kill on timeout — SIGTERM → 2s grace → SIGKILL. No orphaned processes.
 - Concurrency semaphore — max 5 simultaneous osascript processes.
-- Graceful shutdown — `server.close()` with 10s force-exit safety net.
+- Graceful shutdown on SIGTERM/SIGINT — refuses new tool calls and cancels the stdio server task.
 - Error classification — parses macOS error codes (-1728, -1743, -25211) into actionable messages. Supports English and Russian locales.
 
 </details>
@@ -213,7 +229,7 @@ npm test
 ## Requirements
 
 - macOS 13+ (Ventura or later)
-- Node.js 18+
+- Python 3.13+ with [uv](https://docs.astral.sh/uv/)
 
 ## License
 
