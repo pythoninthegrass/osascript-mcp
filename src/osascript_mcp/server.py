@@ -618,10 +618,22 @@ end tell""")
     return None
 
 
-def _menu_ref(esc_path: list[str]) -> str:
-    ref = f'menu "{esc_path[0]}" of menu bar item "{esc_path[0]}" of menu bar 1'
-    for seg in esc_path[1:]:
-        ref = f'menu "{seg}" of menu item "{seg}" of {ref}'
+def _menu_seg_ref(kind: str, seg: str | int) -> str:
+    if isinstance(seg, int):
+        return f"{kind} {seg}"
+    return f'{kind} "{seg}"'
+
+
+def _menu_ref(path_segs: list[str | int]) -> str:
+    first = path_segs[0]
+    if isinstance(first, int):
+        ref = f"menu 1 of menu bar item {first} of menu bar 1"
+    else:
+        ref = f'menu "{first}" of menu bar item "{first}" of menu bar 1'
+    for seg in path_segs[1:]:
+        item_ref = _menu_seg_ref("menu item", seg)
+        submenu = "menu 1" if isinstance(seg, int) else _menu_seg_ref("menu", seg)
+        ref = f"{submenu} of {item_ref} of {ref}"
     return ref
 
 
@@ -653,12 +665,27 @@ async def handle_app_menu(args: dict) -> types.CallToolResult:
     esc_app = escape_as(app_name)
     menu_path = args.get("menu_path") or []
     if not isinstance(menu_path, list):
-        return error_result("Parameter 'menu_path' must be an array of strings.")
-    if not all(isinstance(m, str) and 0 < len(m) <= 200 for m in menu_path):
-        return error_result("Parameter 'menu_path' must be an array of non-empty strings (max 200 chars each).")
+        return error_result("Parameter 'menu_path' must be an array of strings and/or 1-based position integers.")
+    norm_path: list[str | int] = []
+    for m in menu_path:
+        if isinstance(m, str):
+            if not (0 < len(m) <= 200):
+                return error_result(
+                    "Parameter 'menu_path' must be an array of non-empty strings (max 200 chars each) and/or "
+                    "1-based position integers."
+                )
+            norm_path.append(escape_as(m))
+        else:
+            idx = finite_int(m, 1, 200)
+            if idx is None:
+                return error_result(
+                    "Parameter 'menu_path' must be an array of non-empty strings (max 200 chars each) and/or "
+                    "1-based position integers."
+                )
+            norm_path.append(idx)
 
     if args["action"] == "list":
-        if len(menu_path) == 0:
+        if len(norm_path) == 0:
             script = f"""tell application "System Events" to tell process "{esc_app}"
   set rawList to name of every menu bar item of menu bar 1
   set output to ""
@@ -672,9 +699,8 @@ async def handle_app_menu(args: dict) -> types.CallToolResult:
 end tell
 {AS_HELPERS}"""
         else:
-            esc_path = [escape_as(m) for m in menu_path]
             script = f"""tell application "System Events" to tell process "{esc_app}"
-  set rawList to name of every menu item of {_menu_ref(esc_path)}
+  set rawList to name of every menu item of {_menu_ref(norm_path)}
   set output to ""
   repeat with i from 1 to count of rawList
     if item i of rawList is not missing value then
@@ -696,27 +722,26 @@ end tell
     if args["action"] == "click":
         if not menu_path or len(menu_path) < 2:
             return error_result('Parameter \'menu_path\' with at least 2 items is required for "click" (e.g., ["File", "Save"]).')
-        esc_path = [escape_as(m) for m in menu_path]
-        menu_ref = f'menu "{esc_path[0]}" of menu bar item "{esc_path[0]}" of menu bar 1'
-        for seg in esc_path[1:-1]:
-            menu_ref = f'menu "{seg}" of menu item "{seg}" of {menu_ref}'
-        target_item = esc_path[-1]
-        script = f'tell application "System Events" to tell process "{esc_app}"\n  click menu item "{target_item}" of {menu_ref}\nend tell'
+        menu_ref = _menu_ref(norm_path[:-1])
+        target_item_ref = _menu_seg_ref("menu item", norm_path[-1])
+        script = (
+            f'tell application "System Events" to tell process "{esc_app}"\n  click {target_item_ref} of {menu_ref}\nend tell'
+        )
 
         r = await run_as(script)
         if not r["ok"]:
             if r["error"]["category"] == "permission_accessibility":
                 return error_result(ACCESSIBILITY_MSG)
             parent_path = menu_path[:-1]
-            esc_parent = [escape_as(m) for m in parent_path]
-            list_r = await _list_menu_items(esc_app, _menu_ref(esc_parent))
+            list_r = await _list_menu_items(esc_app, _menu_ref(norm_path[:-1]))
             if list_r["ok"]:
                 available = [s for s in list_r["stdout"].split("\n") if s != ""]
                 return error_result(
-                    f"Menu item '{menu_path[-1]}' not found in '{' > '.join(parent_path)}'. Available: {json.dumps(available)}"
+                    f"Menu item '{menu_path[-1]}' not found in "
+                    f"'{' > '.join(str(p) for p in parent_path)}'. Available: {json.dumps(available)}"
                 )
             return error_result(r["error"]["friendlyMessage"])
-        return text_result(f"Clicked: {' > '.join(menu_path)}")
+        return text_result(f"Clicked: {' > '.join(str(p) for p in menu_path)}")
     return None
 
 
@@ -1315,8 +1340,12 @@ TOOLS.extend(
                     "app": {"type": "string", "description": "Application name."},
                     "menu_path": {
                         "type": "array",
-                        "items": {"type": "string"},
-                        "description": 'Menu path, e.g. ["File", "Save"]. Required for click.',
+                        "items": {"type": ["string", "integer"]},
+                        "description": (
+                            'Menu path, e.g. ["File", "Save"]. Segments may be names or 1-based position integers '
+                            '(e.g. ["Debug", 1] clicks the first item of the Debug menu) — use position to dodge '
+                            "-1728 on menu items whose name includes an accelerator annotation. Required for click."
+                        ),
                     },
                 },
                 "required": ["action", "app"],

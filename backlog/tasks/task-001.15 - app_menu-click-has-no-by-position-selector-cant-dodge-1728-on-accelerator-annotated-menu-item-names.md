@@ -3,9 +3,10 @@ id: TASK-001.15
 title: >-
   app_menu click has no by-position selector (can't dodge -1728 on
   accelerator-annotated menu item names)
-status: To Do
+status: Done
 assignee: []
 created_date: '2026-09-23 02:34'
+updated_date: '2026-09-23 02:44'
 labels:
   - python-port
 dependencies:
@@ -13,6 +14,9 @@ dependencies:
 references:
   - /Users/lance/git/swords_of_glass/docs/osascript.md
   - src/osascript_mcp/server.py
+modified_files:
+  - src/osascript_mcp/server.py
+  - tests/test_integration.py
 parent_task_id: TASK-001
 ordinal: 17000
 ---
@@ -29,7 +33,13 @@ Fix options to consider: accept a numeric string/int in `menu_path` segments mea
 
 ## Acceptance Criteria
 <!-- AC:BEGIN -->
-- [ ] #1 app_menu click supports selecting a menu item by ordinal position, not just by literal name
-- [ ] #2 A test exercises position-based click against an app with an accelerator-annotated menu item name
-- [ ] #3 Existing name-based click behavior and its "item not found, here's what's there" error path are unaffected
+- [x] #1 app_menu click supports selecting a menu item by ordinal position, not just by literal name
+- [x] #2 A test exercises position-based click against an app with an accelerator-annotated menu item name
+- [x] #3 Existing name-based click behavior and its "item not found, here's what's there" error path are unaffected
 <!-- AC:END -->
+
+## Final Summary
+
+<!-- SECTION:FINAL_SUMMARY:BEGIN -->
+app_menu's menu_path segments now accept either a string (name) or a 1-based position integer, for both "list" and "click". _menu_ref/_menu_seg_ref build AppleScript refs like `menu 1 of menu bar item 2 of menu bar 1` or `menu item 1 of menu "Debug" of menu item ...` depending on segment type, so a caller can pass e.g. ["Debug", 1] to click the first item of the Debug menu by position instead of by its accelerator-annotated literal name, dodging -1728. Name-based click/list and the "not found, here's what's there" recovery path are unchanged (verified by existing tests, all still passing). Added tests: position-based click/list tolerating Accessibility denial, and updated the non-string-entry rejection test since bare ints are now valid (now uses a dict) plus a new out-of-range-position rejection test.
+<!-- SECTION:FINAL_SUMMARY:END -->
