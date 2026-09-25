@@ -41,7 +41,7 @@ There is no way to run a single integration case in isolation from the CLI beyon
 - Do not set `text item delimiters` inside a `tell` block (breaks Safari, error -10006); set it after `end tell`.
 - `open_url` enforces the http/https/mailto allowlist and normalizes control characters like the WHATWG URL parser before scheme sniffing; `file_open` must keep refusing anything that looks like a URL, otherwise `open(1)` bypasses that allowlist.
 - Permission failures should return the specific System Settings pane (`ACCESSIBILITY_MSG`, category checks on `r["error"]["category"]`).
-- Comments in this codebase record why a guard exists, often tied to a specific audit finding or observed macOS behaviour. Do not remove them.
+- Keep inline comments to 1-2 lines. Longer "why" explanations (audit findings, observed macOS behaviour, design tradeoffs) go in [docs/design-notes.md](docs/design-notes.md), with a short pointer comment left at the call site.
 
 ## Versions and packaging
 

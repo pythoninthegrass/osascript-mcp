@@ -15,10 +15,7 @@ KILL_GRACE_SECONDS = 2
 
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT)
 
-# RepositoryEnv anchored on the repo root (not the bare `decouple.config`/AutoConfig, which
-# walks up from os.getcwd()) so a .env is found regardless of the server's cwd — it's
-# launched via `uvx`/`uv run` from arbitrary directories. Falls back to plain os.environ
-# when there's no .env file to load, since RepositoryEnv requires the file to exist.
+# .env is resolved from the repo root, not cwd — see docs/design-notes.md#config-loading
 _ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
 _config = Config(RepositoryEnv(_ENV_FILE)) if _ENV_FILE.exists() else None
 
@@ -27,15 +24,9 @@ def _env(key: str, default=None):
     return _config(key, default=default) if _config is not None else os.environ.get(key, default)
 
 
-# Extra positional args appended after the script, e.g. `OSASCRIPT_MCP_ARGS="vm-01 admin"`.
-# osascript passes these through as `argv` (JXA) / `on run argv` (AppleScript) parameters,
-# so host-specific values (VM name, account, etc.) can live in an untracked .env instead of
-# being hardcoded into a committed MCP client config.
+# extra osascript argv from OSASCRIPT_MCP_ARGS — see docs/design-notes.md#extra-osascript-args-osascript_mcp_args
 EXTRA_ARGS = shlex.split(_env("OSASCRIPT_MCP_ARGS", "") or "")
 
-# ---------------------------------------------------------------------------
-# Safe error sanitization
-# ---------------------------------------------------------------------------
 _PRIVATE_KEY_RE = re.compile(r"-----BEGIN[\s\S]*?-----END[^-]*-----")
 _JWT_RE = re.compile(r"\beyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+")
 _AWS_KEY_RE = re.compile(r"\bAKIA[0-9A-Z]{16}\b")
@@ -85,9 +76,6 @@ def safe_error(error) -> str:
     return msg
 
 
-# ---------------------------------------------------------------------------
-# Error classifier
-# ---------------------------------------------------------------------------
 def classify_error(stderr, exit_code, timed_out: bool = False) -> dict:
     s = (stderr or "").lower()
 
@@ -164,9 +152,6 @@ def classify_error(stderr, exit_code, timed_out: bool = False) -> dict:
     }
 
 
-# ---------------------------------------------------------------------------
-# Core executor
-# ---------------------------------------------------------------------------
 async def _read_capped_stream(stream: asyncio.StreamReader) -> bytes:
     chunks: list[bytes] = []
     total = 0
@@ -182,8 +167,7 @@ async def _read_capped_stream(stream: asyncio.StreamReader) -> bytes:
 
 
 def _decode_capped(data: bytes) -> str:
-    # Drop a dangling multi-byte sequence at the cap boundary instead of
-    # turning it into U+FFFD.
+    # drop a dangling multi-byte sequence at the cap rather than mangle it into U+FFFD
     while data:
         try:
             return data.decode("utf-8")
@@ -276,9 +260,6 @@ async def execute_command(command: str, args: list[str], timeout_ms: float = DEF
     return await _spawn_guarded(command, args, None, timeout_ms)
 
 
-# ---------------------------------------------------------------------------
-# Convenience wrappers
-# ---------------------------------------------------------------------------
 async def execute_apple_script(script, timeout_ms: float = DEFAULT_TIMEOUT) -> dict:
     return await execute_script(script, "applescript", timeout_ms)
 

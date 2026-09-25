@@ -16,10 +16,6 @@ from mcp.server.stdio import stdio_server
 from osascript_mcp import executor
 from osascript_mcp.executor import _env, classify_error, execute_apple_script, execute_command, safe_error
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Result helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 
 def error_result(msg: str) -> types.CallToolResult:
     return types.CallToolResult(content=[types.TextContent(type="text", text=msg)], is_error=True)
@@ -32,12 +28,7 @@ def text_result(text: str) -> types.CallToolResult:
     return types.CallToolResult(content=[types.TextContent(type="text", text=out)])
 
 
-# TASK-001.13 measured TOON against real captured payloads from this server (not just
-# synthetic ones) and it beat minified JSON by only ~13% overall — under the 15% bar set
-# before looking at the number, and an outright regression on small flat arrays like
-# app_menu's menu-item lists (TOON's "[N]: " header doesn't amortize over short lists).
-# So "json-min" (free, no new failure surface) is the default; "toon" remains available
-# for payloads that are large and uniformly tabular, and "json" for human debugging.
+# json-min is the default; toon underperforms on small flat arrays — see docs/design-notes.md#output-format-default-json-min-vs-toon
 OUTPUT_FORMAT = _env("OSASCRIPT_MCP_FORMAT", "json-min").lower()
 _CAPTURE_PATH = _env("OSASCRIPT_MCP_CAPTURE")
 
@@ -110,10 +101,6 @@ on sanitizeField(theText)
   return t
 end sanitizeField"""
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Subprocess helpers
-# ─────────────────────────────────────────────────────────────────────────────
-
 BIN_SCREENCAPTURE = "/usr/sbin/screencapture"
 BIN_OPEN = "/usr/bin/open"
 BIN_SHORTCUTS = "/usr/bin/shortcuts"
@@ -128,8 +115,7 @@ SCREEN_RECORDING_MSG = (
     "(Terminal/iTerm/Claude) in System Settings > Privacy & Security > Screen Recording."
 )
 
-# screencapture prints these exact fragments to stderr when Screen Recording access is denied
-# (observed on macOS; there is no dedicated exit code or machine-readable error for this case).
+# stderr fragments for a denied Screen Recording permission — see docs/design-notes.md#screen-recording-denial-detection
 _SCREENCAPTURE_DENIAL_FRAGMENTS = (
     "could not create image from display",
     "could not create image from window",
@@ -178,17 +164,12 @@ async def run_as(script: str, timeout_ms: float = executor.DEFAULT_TIMEOUT) -> d
     return {"ok": True, "stdout": r["stdout"].strip()}
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tools: scripting, clipboard, notifications, URLs, apps
-# ─────────────────────────────────────────────────────────────────────────────
-
 _URL_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*:")
 _LEADING_TRAILING_C0_RE = re.compile(r"^[\x00-\x20]+|[\x00-\x20]+$")
 
 
 def _normalize_url(raw: str) -> str:
-    # Mirrors the WHATWG URL parser: TAB/CR/LF are stripped anywhere, then
-    # leading/trailing C0 controls and space are trimmed, before scheme sniffing.
+    # mirrors the WHATWG URL parser: strip TAB/CR/LF, then trim leading/trailing C0/space
     stripped = raw.translate(str.maketrans("", "", "\t\r\n"))
     return _LEADING_TRAILING_C0_RE.sub("", stripped)
 
@@ -403,14 +384,7 @@ async def handle_run_shortcut(args: dict) -> types.CallToolResult:
             shutil.rmtree(tmp_dir, ignore_errors=True)
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tools: accessibility and UI
-# ─────────────────────────────────────────────────────────────────────────────
-
-# A plain dict would make KEY_CODES["constructor"] / KEY_CODES["__proto__"] look
-# like real entries via attribute-style access in other languages; Python dicts
-# don't have that hazard, but the keys are kept identical to the JS port for
-# parity with the "Unknown key" test cases.
+# keys match the JS port's naming for parity with its "Unknown key" test cases — see docs/design-notes.md#key_codes-key-naming
 KEY_CODES = {
     "return": 36,
     "enter": 76,
@@ -810,10 +784,6 @@ async def handle_app_visibility(args: dict) -> types.CallToolResult:
     return text_result(f"Quit: {app_name}")
 
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Tools: browser tabs, displays, screenshot, check_permissions
-# ─────────────────────────────────────────────────────────────────────────────
-
 _KNOWN_BROWSERS = {"safari": "Safari", "chrome": "Google Chrome", "arc": "Arc", "google chrome": "Google Chrome"}
 
 
@@ -928,8 +898,7 @@ async def handle_get_displays(args: dict) -> types.CallToolResult:
 
 
 async def _screenshot_error_result(err_text: str) -> types.CallToolResult:
-    # screencapture's stderr gives no machine-readable signal for a Screen Recording
-    # denial, so match its known failure text and confirm against the real TCC state.
+    # match known stderr text, then confirm via TCC — see docs/design-notes.md#screen-recording-denial-detection
     if any(fragment in err_text for fragment in _SCREENCAPTURE_DENIAL_FRAGMENTS) and await _screen_recording_access() is False:
         return error_result(SCREEN_RECORDING_MSG)
     return error_result(f"Screenshot failed: {err_text}")
@@ -1124,10 +1093,6 @@ async def handle_check_permissions(args: dict) -> types.CallToolResult:
         )
     )
 
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Tool registry — populated by tool-porting tasks
-# ─────────────────────────────────────────────────────────────────────────────
 
 TOOLS: list[types.Tool] = []
 HANDLERS: dict = {}
