@@ -10,25 +10,11 @@ import tempfile
 import time
 import toon_format
 from datetime import UTC, datetime
-from decouple import Config, RepositoryEnv
 from importlib.metadata import version
 from mcp.server.lowlevel import Server
 from mcp.server.stdio import stdio_server
 from osascript_mcp import executor
-from osascript_mcp.executor import classify_error, execute_apple_script, execute_command, safe_error
-from pathlib import Path
-
-# RepositoryEnv anchored on the repo root (not the bare `decouple.config`/AutoConfig, which
-# walks up from os.getcwd()) so a .env is found regardless of the server's cwd — it's
-# launched via `uvx`/`uv run` from arbitrary directories. Falls back to plain os.environ
-# when there's no .env file to load, since RepositoryEnv requires the file to exist.
-_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
-_config = Config(RepositoryEnv(_ENV_FILE)) if _ENV_FILE.exists() else None
-
-
-def _env(key: str, default=None):
-    return _config(key, default=default) if _config is not None else os.environ.get(key, default)
-
+from osascript_mcp.executor import _env, classify_error, execute_apple_script, execute_command, safe_error
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Result helpers

@@ -1,7 +1,10 @@
 import asyncio
 import os
 import re
+import shlex
 import signal
+from decouple import Config, RepositoryEnv
+from pathlib import Path
 
 MAX_CONCURRENT = 5
 MAX_OUTPUT_BYTES = 100 * 1024  # textResult truncates at 50K chars, no need for 1 MB
@@ -11,6 +14,24 @@ MAX_SCRIPT_LENGTH = 50000
 KILL_GRACE_SECONDS = 2
 
 _semaphore = asyncio.Semaphore(MAX_CONCURRENT)
+
+# RepositoryEnv anchored on the repo root (not the bare `decouple.config`/AutoConfig, which
+# walks up from os.getcwd()) so a .env is found regardless of the server's cwd — it's
+# launched via `uvx`/`uv run` from arbitrary directories. Falls back to plain os.environ
+# when there's no .env file to load, since RepositoryEnv requires the file to exist.
+_ENV_FILE = Path(__file__).resolve().parents[2] / ".env"
+_config = Config(RepositoryEnv(_ENV_FILE)) if _ENV_FILE.exists() else None
+
+
+def _env(key: str, default=None):
+    return _config(key, default=default) if _config is not None else os.environ.get(key, default)
+
+
+# Extra positional args appended after the script, e.g. `OSASCRIPT_MCP_ARGS="vm-01 admin"`.
+# osascript passes these through as `argv` (JXA) / `on run argv` (AppleScript) parameters,
+# so host-specific values (VM name, account, etc.) can live in an untracked .env instead of
+# being hardcoded into a committed MCP client config.
+EXTRA_ARGS = shlex.split(_env("OSASCRIPT_MCP_ARGS", "") or "")
 
 # ---------------------------------------------------------------------------
 # Safe error sanitization
@@ -242,6 +263,7 @@ async def execute_script(script, language: str = "applescript", timeout_ms: floa
     if language == "javascript":
         args.extend(["-l", "JavaScript"])
     args.append("-")  # read the script from stdin
+    args.extend(EXTRA_ARGS)
 
     return await _spawn_guarded("/usr/bin/osascript", args, script, timeout_ms)
 

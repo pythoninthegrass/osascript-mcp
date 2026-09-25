@@ -183,7 +183,7 @@ in System Settings > Privacy & Security > Accessibility."
 ## Testing
 
 ```bash
-uv run pytest -m unit          # 95 unit + hypothesis property tests, no macOS side effects
+uv run pytest -m unit          # 97 unit + hypothesis property tests, no macOS side effects
 uv run pytest -m integration   # 81 integration tests against the real server
 ```
 
@@ -199,6 +199,12 @@ result to that file as `{"tool": ..., "payload": ...}` — off unless set, no ef
 response sent to the client. `uv run python bench/replay.py /path/to/file.jsonl` replays a
 capture through each encoding and reports token counts per tool, which is how the numbers in
 [Output Format](#output-format) were produced.
+
+Set `OSASCRIPT_MCP_ARGS="arg1 arg2"` (shell-quoted, space-separated) to append positional
+arguments after the script on every `osascript` invocation. `osascript` exposes these to the
+script as `argv` (JXA) / `on run argv` (AppleScript), so a deployment that needs a
+host-specific value (a VM name, an account, a path) can put it in an untracked `.env` or the
+MCP client's `env` block instead of hardcoding it into a committed `args` array.
 
 <details>
 <summary>Security & Architecture</summary>

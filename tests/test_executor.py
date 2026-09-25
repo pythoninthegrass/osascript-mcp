@@ -205,6 +205,18 @@ class TestExecuteScript:
         result = await execute_apple_script(script)
         result["stdout"].encode("utf-8")
 
+    async def test_extra_args_from_env_are_passed_as_argv(self, monkeypatch):
+        monkeypatch.setattr("osascript_mcp.executor.EXTRA_ARGS", ["vm-01", "admin"])
+        script = "on run argv\nreturn argv as text\nend run"
+        result = await execute_apple_script(script)
+        assert result["exit_code"] == 0
+        assert result["stdout"].strip() == "vm-01admin"
+
+    async def test_no_extra_args_by_default(self):
+        script = "on run argv\nreturn (count of argv) as text\nend run"
+        result = await execute_apple_script(script)
+        assert result["stdout"].strip() == "0"
+
 
 class TestExecuteCommand:
     async def test_runs_argv_command(self):
