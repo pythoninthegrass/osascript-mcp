@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.3.0](https://github.com/pythoninthegrass/osascript-mcp/compare/v1.2.0...v1.3.0) (2026-09-25)
+
+
+### Features
+
+* **executor:** support extra osascript args via OSASCRIPT_MCP_ARGS ([1304282](https://github.com/pythoninthegrass/osascript-mcp/commit/13042823374ae24fa6cc6f7301fce58a6ffafefb))
+
+
+### Documentation
+
+* move wall-of-text comments to docs/design-notes.md ([16bf1a6](https://github.com/pythoninthegrass/osascript-mcp/commit/16bf1a69cb9e206b3cf8edb9dbf47de382e1fc6d))
+
 ## [1.2.0](https://github.com/pythoninthegrass/osascript-mcp/compare/v1.1.3...v1.2.0) (2026-09-23)
 
 
